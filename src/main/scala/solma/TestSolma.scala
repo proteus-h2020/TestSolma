@@ -1,12 +1,9 @@
 package solma
 
 import org.apache.flink.ml.math.{DenseVector, Vector}
-import org.apache.flink.ml.math.Breeze._
 import org.apache.flink.streaming.api.scala._
-import org.apache.flink.contrib.streaming.scala.utils._
-import breeze.linalg
-import eu.proteus.solma.fd.FrequentDirections
-import scala.collection.mutable
+import eu.proteus.solma.sampling.SimpleReservoirSampling
+
 
 object TestSolma {
 
@@ -60,47 +57,22 @@ object TestSolma {
       DenseVector(Array(1200.00, 3.00, 0.0)),
       DenseVector(Array(852.00, 2.00, 0.0)),
       DenseVector(Array(1852.00, 4.00, 0.0)),
-      DenseVector(Array(1203.00, 3.00, 0.0)))
+      DenseVector(Array(1203.00, 3.00, 0.0))
+    )
 
 
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setParallelism(1)
     env.setMaxParallelism(1)
 
-    val ell = 5
-
     val stream = env.fromCollection(data)
 
-    val transformer = FrequentDirections()
-      .setSketchSize(ell)
-      .setFeaturesNumber(3)
+    val transformer = SimpleReservoirSampling()
+      .setReservoirSize(5)
 
-    val it = transformer.transform(stream).collect()
+    transformer.transform(stream).print()
 
-    val values = new mutable.ArrayBuffer[Vector]()
-
-    it foreach values.+=
-
-    val A = linalg.DenseMatrix.zeros[Double](data.length, data.head.size)
-    val B = linalg.DenseMatrix.zeros[Double](ell, data.head.size)
-
-    for ((x, i) <- data.view.zipWithIndex) {
-      val xb = x.asBreeze
-      A(i, ::) := xb.t
-    }
-
-    for ((x, i) <- values.drop(values.size - ell).view.zipWithIndex) {
-      val xb = x.asBreeze
-      B(i, ::) := xb.t
-    }
-
-    val AAT = A.t * A
-    val BBT = B.t * B
-
-    val left = (AAT - BBT).data.foldLeft(0.0)((acc: Double, x) => acc + x)
-    val right = AAT.data.foldLeft(0.0)((acc: Double, x) => acc + math.pow(x, 2.0)) * ell
-    println(left)
-    println(right)
+    env.execute()
   }
 
 
